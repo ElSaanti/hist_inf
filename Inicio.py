@@ -19,7 +19,7 @@ def encode_image_to_base64(image_path):
         return ""
 
 # ---------------- UI ----------------
-st.set_page_config(page_title='Tablero Inteligente')
+st.set_page_config(page_title='Historias creativas con imagenes')
 st.title('Tablero Inteligente')
 
 st.info("""
