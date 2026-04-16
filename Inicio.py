@@ -37,10 +37,10 @@ Cómo funciona:
 3. Luego podrás convertirlo en una historia infantil
 
 Ideas para dibujar:
-- Un dragón 🐉
-- Un robot 🤖
-- Una casa mágica 🏠
-- Un monstruo divertido 👾
+- Una casa 
+- Un monstruo 
+- Un Animal
+- Objetos
 """)
 
 with st.sidebar:
@@ -73,62 +73,6 @@ api_key = os.environ['OPENAI_API_KEY']
 
 client = OpenAI(api_key=api_key)
 
-analyze_button = st.button("Analiza la imagen")
-
-# ---------------- ANÁLISIS ----------------
-if canvas_result.image_data is not None and api_key and analyze_button:
-
-    with st.spinner("Analizando..."):
-        input_numpy_array = np.array(canvas_result.image_data)
-        input_image = Image.fromarray(input_numpy_array.astype('uint8')).convert('RGBA')
-        input_image.save('img.png')
-
-        base64_image = encode_image_to_base64("img.png")
-        st.session_state.base64_image = base64_image
-
-        # ✅ (2) Prompt mejorado
-        prompt_text = """
-        Describe en español lo que ves en la imagen de forma clara.
-
-        Incluye:
-        - Qué es el objeto o personaje
-        - Estilo del dibujo (infantil, simple, boceto, etc.)
-        - Posible contexto o situación
-
-        Sé breve pero descriptivo.
-        """
-
-        try:
-            response = openai.chat.completions.create(
-                model="gpt-4o-mini",
-                messages=[
-                    {
-                        "role": "user",
-                        "content": [
-                            {"type": "text", "text": prompt_text},
-                            {
-                                "type": "image_url",
-                                "image_url": {
-                                    "url": f"data:image/png;base64,{base64_image}",
-                                },
-                            },
-                        ],
-                    }
-                ],
-                max_tokens=300,
-            )
-
-            full_response = response.choices[0].message.content
-
-            # ✅ (5) Mostrar mejor el análisis
-            st.markdown("### 🧠 Interpretación del dibujo")
-            st.success(full_response)
-
-            st.session_state.full_response = full_response
-            st.session_state.analysis_done = True
-
-        except Exception as e:
-            st.error(f"Error: {e}")
 
 # ---------------- HISTORIA ----------------
 if st.session_state.analysis_done:
