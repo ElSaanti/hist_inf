@@ -7,9 +7,6 @@ from PIL import Image
 import numpy as np
 from streamlit_drawable_canvas import st_canvas
 
-Expert=" "
-profile_imgenh=" "
-
 # Inicializar session_state
 if 'analysis_done' not in st.session_state:
     st.session_state.analysis_done = False
@@ -23,31 +20,30 @@ def encode_image_to_base64(image_path):
         with open(image_path, "rb") as image_file:
             return base64.b64encode(image_file.read()).decode("utf-8")
     except FileNotFoundError:
-        return "Error: La imagen no se encontró."
+        return ""
 
 # ---------------- UI ----------------
 st.set_page_config(page_title='Tablero Inteligente')
 st.title('Tablero Inteligente')
 
-# ✅ (1) Explicación + ideas
+# ✅ Explicación + nuevas ideas
 st.info("""
 Cómo funciona:
-1. Dibuja algo (personaje, objeto, escena)
-2. La IA lo interpretará
-3. Luego podrás convertirlo en una historia infantil
+1. Dibuja algo
+2. La IA lo usará para crear una historia
 
 Ideas para dibujar:
-- Una casa 
-- Un monstruo 
-- Un Animal
+- Una casa
+- Un monstruo
+- Un animal
 - Objetos
 """)
 
 with st.sidebar:
     st.subheader("Acerca de:")
-    st.write("Esta app interpreta dibujos y crea historias.")
+    st.write("Dibuja y crea historias automáticamente.")
 
-st.subheader("Dibuja el boceto en el panel y presiona analizar")
+st.subheader("Dibuja en el panel y crea una historia")
 
 # Canvas config
 drawing_mode = "freedraw"
@@ -73,49 +69,61 @@ api_key = os.environ['OPENAI_API_KEY']
 
 client = OpenAI(api_key=api_key)
 
+# ---------------- CREAR HISTORIA DIRECTO ----------------
+if st.button("✨ Crear historia"):
 
-# ---------------- HISTORIA ----------------
-if st.session_state.analysis_done:
-    st.divider()
-    st.subheader("📚 Crear historia")
-
-    # ✅ (4) Tipo de historia
-    story_type = st.selectbox(
-        "Tipo de historia:",
-        ["Aventura", "Fantasía", "Comedia", "Misterio", "Educativa"]
-    )
-
-    if st.button("✨ Crear historia infantil"):
+    if canvas_result.image_data is None:
+        st.warning("Dibuja algo primero")
+    elif not api_key:
+        st.warning("Falta API key")
+    else:
         with st.spinner("Creando historia..."):
 
-            # ✅ (3) Prompt mejorado
-            story_prompt = f"""
-            Crea una historia infantil de tipo {story_type} basada en:
+            input_numpy_array = np.array(canvas_result.image_data)
+            input_image = Image.fromarray(input_numpy_array.astype('uint8')).convert('RGBA')
+            input_image.save('img.png')
 
-            {st.session_state.full_response}
+            base64_image = encode_image_to_base64("img.png")
 
-            Debe:
+            prompt = """
+            Observa la imagen y crea directamente una historia infantil.
+
+            La historia debe:
+            - Basarse en lo que ves en el dibujo
             - Tener inicio, desarrollo y final
-            - Tener un personaje principal claro
+            - Tener un personaje principal
             - Ser creativa y fácil de entender
-            - Tener tono divertido o mágico
+            - Tener un tono divertido o mágico
 
-            Opcional: incluye una enseñanza al final.
+            No expliques la imagen, solo escribe la historia.
             """
 
-            story_response = openai.chat.completions.create(
-                model="gpt-4o-mini",
-                messages=[{"role": "user", "content": story_prompt}],
-                max_tokens=500,
-            )
+            try:
+                response = openai.chat.completions.create(
+                    model="gpt-4o-mini",
+                    messages=[
+                        {
+                            "role": "user",
+                            "content": [
+                                {"type": "text", "text": prompt},
+                                {
+                                    "type": "image_url",
+                                    "image_url": {
+                                        "url": f"data:image/png;base64,{base64_image}",
+                                    },
+                                },
+                            ],
+                        }
+                    ],
+                    max_tokens=500,
+                )
 
-            st.markdown("### 📖 Tu historia")
-            st.write(story_response.choices[0].message.content)
+                st.markdown("### 📖 Tu historia")
+                st.write(response.choices[0].message.content)
 
-    # ✅ (6) Regenerar historia
-    if st.button("🔄 Generar otra versión"):
-        st.session_state.analysis_done = True
+            except Exception as e:
+                st.error(f"Error: {e}")
 
-# Warnings
+# Warning
 if not api_key:
     st.warning("Por favor ingresa tu API key.")
