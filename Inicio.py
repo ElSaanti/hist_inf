@@ -20,7 +20,7 @@ def encode_image_to_base64(image_path):
 
 # ---------------- UI ----------------
 st.set_page_config(page_title='Historias creativas con imagenes')
-st.title('Tablero Inteligente')
+st.title('Historias creativas con imagenes')
 
 st.info("""
 Cómo funciona:
