@@ -3,9 +3,8 @@ import streamlit as st
 import base64
 from openai import OpenAI
 import openai
-from PIL import Image, ImageOps
+from PIL import Image
 import numpy as np
-import pandas as pd
 from streamlit_drawable_canvas import st_canvas
 
 Expert=" "
@@ -18,31 +17,44 @@ if 'full_response' not in st.session_state:
     st.session_state.full_response = ""
 if 'base64_image' not in st.session_state:
     st.session_state.base64_image = ""
-    
+
 def encode_image_to_base64(image_path):
     try:
         with open(image_path, "rb") as image_file:
-            encoded_image = base64.b64encode(image_file.read()).decode("utf-8")
-            return encoded_image
+            return base64.b64encode(image_file.read()).decode("utf-8")
     except FileNotFoundError:
-        return "Error: La imagen no se encontró en la ruta especificada."
+        return "Error: La imagen no se encontró."
 
-
-# Streamlit 
+# ---------------- UI ----------------
 st.set_page_config(page_title='Tablero Inteligente')
 st.title('Tablero Inteligente')
+
+# ✅ (1) Explicación + ideas
+st.info("""
+Cómo funciona:
+1. Dibuja algo (personaje, objeto, escena)
+2. La IA lo interpretará
+3. Luego podrás convertirlo en una historia infantil
+
+Ideas para dibujar:
+- Un dragón 🐉
+- Un robot 🤖
+- Una casa mágica 🏠
+- Un monstruo divertido 👾
+""")
+
 with st.sidebar:
     st.subheader("Acerca de:")
-    st.subheader("En esta aplicación veremos la capacidad que ahora tiene una máquina de interpretar un boceto")
-st.subheader("Dibuja el boceto en el panel y presiona el botón para analizarla")
+    st.write("Esta app interpreta dibujos y crea historias.")
 
-# Add canvas component
+st.subheader("Dibuja el boceto en el panel y presiona analizar")
+
+# Canvas config
 drawing_mode = "freedraw"
-stroke_width = st.sidebar.slider('Selecciona el ancho de línea', 1, 30, 5)
-stroke_color = "#000000" 
-bg_color = '#FFFFFF'
+stroke_width = st.sidebar.slider('Ancho de línea', 1, 30, 5)
+stroke_color = "#000000"
+bg_color = "#FFFFFF"
 
-# Create a canvas component
 canvas_result = st_canvas(
     fill_color="rgba(255, 165, 0, 0.3)",
     stroke_width=stroke_width,
@@ -54,90 +66,112 @@ canvas_result = st_canvas(
     key="canvas",
 )
 
+# API Key
 ke = st.text_input('Ingresa tu Clave', type="password")
 os.environ['OPENAI_API_KEY'] = ke
-
-# Retrieve the OpenAI API Key
 api_key = os.environ['OPENAI_API_KEY']
 
-# Initialize the OpenAI client with the API key
 client = OpenAI(api_key=api_key)
 
-analyze_button = st.button("Analiza la imagen", type="secondary")
+analyze_button = st.button("Analiza la imagen")
 
-# Check if an image has been uploaded, if the API key is available, and if the button has been pressed
+# ---------------- ANÁLISIS ----------------
 if canvas_result.image_data is not None and api_key and analyze_button:
 
-    with st.spinner("Analizando ..."):
-        # Encode the image
+    with st.spinner("Analizando..."):
         input_numpy_array = np.array(canvas_result.image_data)
         input_image = Image.fromarray(input_numpy_array.astype('uint8')).convert('RGBA')
         input_image.save('img.png')
-        
-        # Codificar la imagen en base64
+
         base64_image = encode_image_to_base64("img.png")
         st.session_state.base64_image = base64_image
-            
-        prompt_text = (f"Describe in spanish briefly the image")
-    
-        # Make the request to the OpenAI API
+
+        # ✅ (2) Prompt mejorado
+        prompt_text = """
+        Describe en español lo que ves en la imagen de forma clara.
+
+        Incluye:
+        - Qué es el objeto o personaje
+        - Estilo del dibujo (infantil, simple, boceto, etc.)
+        - Posible contexto o situación
+
+        Sé breve pero descriptivo.
+        """
+
         try:
-            full_response = ""
-            message_placeholder = st.empty()
             response = openai.chat.completions.create(
-              model= "gpt-4o-mini",
-              messages=[
-                {
-                   "role": "user",
-                   "content": [
-                     {"type": "text", "text": prompt_text},
-                     {
-                       "type": "image_url",
-                       "image_url": {
-                         "url": f"data:image/png;base64,{base64_image}",
-                       },
-                     },
-                   ],
-                  }
+                model="gpt-4o-mini",
+                messages=[
+                    {
+                        "role": "user",
+                        "content": [
+                            {"type": "text", "text": prompt_text},
+                            {
+                                "type": "image_url",
+                                "image_url": {
+                                    "url": f"data:image/png;base64,{base64_image}",
+                                },
+                            },
+                        ],
+                    }
                 ],
-              max_tokens=500,
-              )
-            
-            if response.choices[0].message.content is not None:
-                    full_response += response.choices[0].message.content
-                    message_placeholder.markdown(full_response + "▌")
-            
-            # Final update to placeholder after the stream ends
-            message_placeholder.markdown(full_response)
-            
-            # Guardar en session_state
+                max_tokens=300,
+            )
+
+            full_response = response.choices[0].message.content
+
+            # ✅ (5) Mostrar mejor el análisis
+            st.markdown("### 🧠 Interpretación del dibujo")
+            st.success(full_response)
+
             st.session_state.full_response = full_response
             st.session_state.analysis_done = True
-            
-            if Expert== profile_imgenh:
-               st.session_state.mi_respuesta= response.choices[0].message.content
-    
-        except Exception as e:
-            st.error(f"An error occurred: {e}")
 
-# Mostrar la funcionalidad de crear historia si ya se hizo el análisis
+        except Exception as e:
+            st.error(f"Error: {e}")
+
+# ---------------- HISTORIA ----------------
 if st.session_state.analysis_done:
     st.divider()
-    st.subheader("📚 ¿Quieres crear una historia?")
-    
+    st.subheader("📚 Crear historia")
+
+    # ✅ (4) Tipo de historia
+    story_type = st.selectbox(
+        "Tipo de historia:",
+        ["Aventura", "Fantasía", "Comedia", "Misterio", "Educativa"]
+    )
+
     if st.button("✨ Crear historia infantil"):
         with st.spinner("Creando historia..."):
-            story_prompt = f"Basándote en esta descripción: '{st.session_state.full_response}', crea una historia infantil breve y entretenida. La historia debe ser creativa y apropiada para niños."
-            
+
+            # ✅ (3) Prompt mejorado
+            story_prompt = f"""
+            Crea una historia infantil de tipo {story_type} basada en:
+
+            {st.session_state.full_response}
+
+            Debe:
+            - Tener inicio, desarrollo y final
+            - Tener un personaje principal claro
+            - Ser creativa y fácil de entender
+            - Tener tono divertido o mágico
+
+            Opcional: incluye una enseñanza al final.
+            """
+
             story_response = openai.chat.completions.create(
                 model="gpt-4o-mini",
                 messages=[{"role": "user", "content": story_prompt}],
                 max_tokens=500,
             )
-            
-            st.markdown("**📖 Tu historia:**")
+
+            st.markdown("### 📖 Tu historia")
             st.write(story_response.choices[0].message.content)
 
-# Warnings for user action required
+    # ✅ (6) Regenerar historia
+    if st.button("🔄 Generar otra versión"):
+        st.session_state.analysis_done = True
+
+# Warnings
 if not api_key:
     st.warning("Por favor ingresa tu API key.")
